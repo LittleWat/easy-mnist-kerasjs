@@ -1,6 +1,17 @@
 var querystring = require("querystring"),
     fs = require("fs"),
-    formidable = require("formidable");
+    formidable = require("formidable"),
+    PNG = require('png-js');
+    
+const KerasJS = require('keras-js');
+var model = new KerasJS.Model({
+    filepaths: {
+        model: './data/mnist_cnn.json',
+        weights: './data/mnist_cnn_weights.buf',
+        metadata: './data/mnist_cnn_metadata.json'
+    },
+    filesystem: true
+});
 
 function start(response) {
   console.log("Request handler 'start' was called.");
@@ -40,10 +51,34 @@ function upload(response, request) {
         fs.rename(files.upload.path, "/tmp/test.png");
       }
     });
-    response.writeHead(200, {"Content-Type": "text/html"});
-    response.write("received image:<br/>");
-    response.write("<img src='/show' />");
-    response.end();
+    var myimage = new PNG.load("/tmp/test.png");
+    var width  = myimage.width;
+    var height = myimage.height;
+    console.log(width, height);
+
+    myimage.decode(function (pixels) {
+        var raw = new Float32Array(pixels);
+        var data = new Float32Array(784);
+        for (let i = 0, len = raw.length; i < len; i += 4) {
+               data[i/4] = (raw[i] - 127.5) / 127.5;
+        }
+    
+        console.log(data.length);
+        inputData = {"input": data};
+        console.log(inputData.input.length);
+        
+        model.ready().then(() => {
+            model.predict(inputData).then(outputData => {
+                console.log(outputData);
+                
+                response.writeHead(200, {"Content-Type": "text/html"});
+                response.write("received image:<br/>");
+                response.log(outputData); // This can cause error
+                response.write("<img src='/show' />");
+                response.end();
+            })
+        });
+    });
   });
 }
 
