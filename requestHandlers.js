@@ -1,7 +1,7 @@
 var querystring = require("querystring"),
     fs = require("fs"),
     formidable = require("formidable"),
-    PNG = require('png-js'),
+    Jimp = require('jimp'),
     argmax = require( 'compute-argmax' );
 
 const KerasJS = require('keras-js');
@@ -52,20 +52,22 @@ function upload(response, request) {
                 fs.rename(files.upload.path, "/tmp/test.png");
             }
             
-            var myimage = new PNG.load("/tmp/test.png");
-            var width  = myimage.width;
-            var height = myimage.height;
-            console.log(width, height);
-            
-            myimage.decode(function (pixels) {
-                var raw = new Float32Array(pixels);
-                var data = new Float32Array(784);
-                for (let i = 0, len = raw.length; i < len; i += 4) {
-                    data[i/4] = (raw[i] - 127.5) / 127.5;
-                }
-                console.log(data.length);
-                inputData = {"input": data};
-                console.log(inputData.input.length);
+            var tmp;
+            Jimp.read("/tmp/test.png", function (err, img) {
+                if (err) throw err;
+                resized_img = img.resize(28, 28) ;  // only for mnist
+                
+                var red_list = [];
+                resized_img.scan(0, 0, resized_img.bitmap.width, resized_img.bitmap.height, function (x, y, idx) {
+                        var red   = this.bitmap.data[ idx + 0 ];
+                        var green = this.bitmap.data[ idx + 1 ];
+                        var blue  = this.bitmap.data[ idx + 2 ];
+                        var alpha = this.bitmap.data[ idx + 3 ];
+                        red = (red - 127.5) / 127.5;
+                        red_list.push(red);
+                    });
+                
+                var  inputData = {"input": new Float32Array(red_list)};
                 model.ready().then(() => {
                     model.predict(inputData).then(outputData => {
                         console.log(outputData);
@@ -76,12 +78,8 @@ function upload(response, request) {
                         response.end();
                     })
                 });
-            });
-            
+            });                    
         });
-
-
-
     });
 }
 
